@@ -7,10 +7,16 @@ import inspect
 from transformers import SegformerImageProcessor, SegformerForSemanticSegmentation
 
 class SegformerEngine:
-    """모드 1, 2를 위한 RGB 전용 허깅페이스 엔진"""
+    """모드 1, 2를 위한 RGB 전용 허깅페이스 엔진 (오프라인 모드)"""
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.processor = SegformerImageProcessor.from_pretrained("nvidia/segformer-b0-finetuned-ade-512-512")
+        
+        # 로컬 절대 경로 지정
+        local_path = '/home/bhin/ros2_ws/src/my_robot_segmentation/weights/segformer_b0'
+        
+        # local_dir_use_symlinks=False 파라미터를 추가하여 캐시를 타지 않고 로컬 파일을 직접 읽도록 강제
+        self.processor = SegformerImageProcessor.from_pretrained(local_path, local_files_only=True)
+        self.model = SegformerForSemanticSegmentation.from_pretrained(local_path, local_files_only=True)
         self.model = SegformerForSemanticSegmentation.from_pretrained("nvidia/segformer-b0-finetuned-ade-512-512")
         self.model.to(self.device)
         self.model.eval()
