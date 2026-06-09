@@ -24,6 +24,7 @@ class SemanticCostmapGenerator:
         self.U_map = np.floor((self.fx * (self.X_map / self.Z_map)) + self.cx).astype(np.int32)
         self.V_map = np.floor((self.fy * (self.h / self.Z_map)) + self.cy).astype(np.int32)
 
+    # 🌟 추가되었던 파라미터(object_details, prior_sizes) 제거
     def generate_costmap(self, floor_mask):
         """
         floor_mask: RGB 세그멘테이션 결과 (mono8, 255: 바닥, 0: 장애물/배경)
