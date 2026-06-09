@@ -5,12 +5,12 @@ __pycache__/
 *.log
 
 # AI Weights & Large Data
-weights/
-*.pth
-*.tar.gz
-*.bag
-*.db3
-data/
+# weights/
+# *.pth
+# *.tar.gz
+# *.bag
+# *.db3
+# data/
 
 # ROS 2 (Just in case)
 build/
