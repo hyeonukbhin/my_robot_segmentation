@@ -1,5 +1,4 @@
 openvino
-transformers
 numpy
 opencv-python
 rospkg
