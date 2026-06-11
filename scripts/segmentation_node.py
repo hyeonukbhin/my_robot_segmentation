@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
+import os
+import sys
 import rospy
+import rospkg
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 
-# OpenVINO 엔진 로드 (같은 scripts 폴더 내에 있으므로 직접 import)
+# 🌟 추가된 부분: 현재 패키지의 scripts 폴더를 파이썬 라이브러리 경로에 강제 추가
+rospack = rospkg.RosPack()
+pkg_path = rospack.get_path('my_robot_segmentation')
+sys.path.append(os.path.join(pkg_path, 'scripts'))
+
+# OpenVINO 엔진 로드 (이제 경로가 잡혀서 에러 없이 임포트됩니다!)
 from inference_engine import SegformerEngineOV
 
 class ExperimentNode:
