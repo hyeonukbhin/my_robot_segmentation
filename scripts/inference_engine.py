@@ -7,7 +7,7 @@ import openvino as ov
 import rospkg 
 
 class SegformerEngineOV:
-    """Mode 1 전용: 불필요 레이블 선행 제거 및 원본 해상도 복구 엔진 (CPU 레거시 최적화 버전)"""
+    """Mode 1 전용: 불필요 레이블 선행 제거 및 원본 해상도 복구 엔진 (FP32/INT8 딕셔너리 선택)"""
     def __init__(self):
         rospack = rospkg.RosPack()
         pkg_path = rospack.get_path('my_robot_segmentation')
@@ -19,20 +19,30 @@ class SegformerEngineOV:
         
         self.core = ov.Core()
         
-        # [기존 유지] 원본 FP32 모델 경로 그대로 사용
-        model_path = os.path.join(pkg_path, 'weights/segformer_ov/segformer.xml')
-        
-        print("🔄 OpenVINO 모델 로딩 중 (CPU 극한 최적화 & 고해상도 모드)...")
-        
         # ==========================================================
-        # 🚀 하드웨어 가속 대신 CPU의 모든 물리 코어를 쥐어짜는 최적화 설정
+        # 🚀 사용자 설정: 여기서 "int8" 또는 "fp32"로 이름만 바꿔주세요!
         # ==========================================================
-        config = {
-            "PERFORMANCE_HINT": "LATENCY",  # 처리량보다 단일 프레임 지연 시간(Latency) 최소화에 집중
-            "INFERENCE_NUM_THREADS": "0"    # 0 설정 시 시스템의 가용 물리 코어를 자동으로 최대 할당
+        target_mode = "int8" 
+        
+        # 모델 파일명 매핑 딕셔너리
+        model_dict = {
+            "fp32": "segformer.xml",
+            "int8": "segformer_int8.xml"
         }
         
-        # device_name을 "AUTO"에서 "CPU"로 고정하고 최적화 config를 주입합니다.
+        # 딕셔너리에서 파일명을 가져옵니다. (오타 방지용 기본값은 fp32)
+        model_name = model_dict.get(target_mode, "segformer.xml")
+        model_path = os.path.join(pkg_path, f'weights/segformer_ov/{model_name}')
+        
+        print(f"🔄 OpenVINO 모델 로딩 중: [{target_mode.upper()} 버전] + CPU 극한 최적화 모드...")
+        
+        # 하드웨어 가속 대신 CPU의 모든 물리 코어를 쥐어짜는 최적화 설정
+        config = {
+            "PERFORMANCE_HINT": "LATENCY",  # 단일 프레임 지연 시간(Latency) 최소화 집중
+            "INFERENCE_NUM_THREADS": "0"    # 가용 물리 코어 자동 최대 할당
+        }
+        
+        # CPU 고정 및 최적화 config 주입
         self.compiled_model = self.core.compile_model(
             model=model_path, 
             device_name="CPU", 
@@ -40,12 +50,12 @@ class SegformerEngineOV:
         )
         
         self.output_layer = self.compiled_model.output(0)
-        print("✅ OpenVINO Segformer 엔진(CPU_LATENCY 최적화) 준비 완료!")
+        print(f"✅ OpenVINO Segformer 엔진 준비 완료! [로드된 파일: {model_name}]")
 
     def infer(self, cv_rgb):
         original_h, original_w = cv_rgb.shape[:2]
 
-        # 1. 모델 규격에 맞춘 전처리 (기존 무거운 허깅페이스 라이브러리와 100% 동일한 동작)
+        # 1. 모델 규격에 맞춘 전처리
         img_float = cv2.resize(cv_rgb, self.input_size, interpolation=cv2.INTER_LINEAR).astype(np.float32)
         img_float /= 255.0
         img_float -= self.mean
@@ -57,19 +67,11 @@ class SegformerEngineOV:
         results = self.compiled_model([input_tensor])[self.output_layer]
         logits = results[0] 
 
-        # ==========================================================
-        # 🚀 기존 레이블 최적화 로직 100% 유지
-        # ==========================================================
-        # 150개 중 우리가 필요한 '바닥(3번)' 확률맵만 떼어냅니다.
+        # 3. 레이블 압축 및 최적화 추출 (150개 레이블 -> 2개 레이블)
         floor_logit = logits[3, :, :]
-        
-        # 나머지 149개 레이블은 겹쳐서 가장 높은 '배경 확률맵' 1장으로 압축해 버립니다. (148개 폐기)
         bg_logit = np.max(np.delete(logits, 3, axis=0), axis=0)
 
-        # ==========================================================
-        # 🚀 원본 해상도 복구 로직 100% 유지
-        # ==========================================================
-        # 연산이 150장 -> 2장으로 줄었으므로, 이 2장만 카메라 원본 해상도로 부드럽게 확대합니다.
+        # 4. 원본 해상도 고품질 복구 작업
         floor_logit_up = cv2.resize(floor_logit, (original_w, original_h), interpolation=cv2.INTER_LINEAR)
         bg_logit_up = cv2.resize(bg_logit, (original_w, original_h), interpolation=cv2.INTER_LINEAR)
         
